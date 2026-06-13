@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Platform, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Pressable, ScrollView, Platform, Alert, Switch } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
+import MapView, { Marker, UrlTile, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { useTheme } from '@/hooks/use-theme';
 import { useTaskManager } from '@/hooks/use-task-manager';
@@ -26,6 +28,125 @@ export default function HomeScreen() {
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.MEDIUM);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'completed'>('idle');
 
+  // Location state
+  const [locationEnabled, setLocationEnabled] = useState(true);
+  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number; address?: string } | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
+  // Fetch current GPS location and set it
+  const fetchCurrentLocation = async () => {
+    let loc = null;
+    try {
+      // Try to get last known position first (fast and reliable)
+      loc = await Location.getLastKnownPositionAsync({});
+      if (!loc) {
+        // Request balanced accuracy location to avoid timeout/failure on simulators
+        loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+    } catch (posError) {
+      console.warn("Could not retrieve current GPS position:", posError);
+    }
+
+    if (loc) {
+      const initialLoc = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      };
+      setSelectedLocation(initialLoc);
+      reverseGeocode(loc.coords.latitude, loc.coords.longitude);
+    } else {
+      // Default fallback location (center of Bogotá) to let user select location manually
+      const defaultLoc = {
+        latitude: 4.6097,
+        longitude: -74.0817,
+        address: "Bogotá, Colombia"
+      };
+      setSelectedLocation(defaultLoc);
+      reverseGeocode(defaultLoc.latitude, defaultLoc.longitude);
+    }
+  };
+
+  // Request location permission
+  const requestLocationPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        setLocationPermission(true);
+        await fetchCurrentLocation();
+      } else {
+        setLocationPermission(false);
+      }
+    } catch (e) {
+      setLocationPermission(false);
+    }
+  };
+
+  // Reverse geocoding via Google REST HTTP or Expo local geocoder fallback
+  const reverseGeocode = async (lat: number, lng: number) => {
+    setIsGeocoding(true);
+    try {
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (apiKey && apiKey.trim() !== '') {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=es`
+        );
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+          const formatted = data.results[0].formatted_address;
+          const parts = formatted.split(',');
+          const shortAddress = parts.length > 1 ? `${parts[0].trim()}, ${parts[1].trim()}` : formatted;
+          setSelectedLocation({ latitude: lat, longitude: lng, address: shortAddress });
+          return;
+        }
+      }
+
+      // Fallback for native devices using expo-location
+      if (Platform.OS !== 'web') {
+        const [addr] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        if (addr) {
+          const shortAddress = [addr.street, addr.streetNumber, addr.city]
+            .filter(Boolean)
+            .join(', ');
+          setSelectedLocation({ latitude: lat, longitude: lng, address: shortAddress || `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}` });
+          return;
+        }
+      }
+
+      setSelectedLocation({ latitude: lat, longitude: lng, address: `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}` });
+    } catch (e) {
+      console.error('Error reverse geocoding:', e);
+      setSelectedLocation({ latitude: lat, longitude: lng, address: `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}` });
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Effect to handle permission request and location fetching when form is opened
+  useEffect(() => {
+    if (isAddingTask && locationEnabled) {
+      if (locationPermission === null) {
+        requestLocationPermission();
+      } else if (locationPermission === true && !selectedLocation) {
+        fetchCurrentLocation();
+      }
+    }
+  }, [isAddingTask, locationEnabled, locationPermission]);
+
+  const handleMapPress = (e: any) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    setSelectedLocation({ latitude, longitude });
+    reverseGeocode(latitude, longitude);
+  };
+
+  const handleMarkerDragEnd = (e: any) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    setSelectedLocation({ latitude, longitude });
+    reverseGeocode(latitude, longitude);
+  };
+
   // Group tasks by priority
   const highTasks = tasks.filter(t => t.getPriority() === TaskPriority.HIGH);
   const medTasks = tasks.filter(t => t.getPriority() === TaskPriority.MEDIUM);
@@ -49,12 +170,19 @@ export default function HomeScreen() {
 
     setSaveStatus('saving');
     setTimeout(async () => {
-      await addTask(title, description, priority);
+      await addTask(
+        title,
+        description,
+        priority,
+        locationEnabled && selectedLocation ? selectedLocation : undefined
+      );
       setSaveStatus('completed');
       setTimeout(() => {
         setTitle('');
         setDescription('');
         setPriority(TaskPriority.MEDIUM);
+        setLocationEnabled(true);
+        setSelectedLocation(null);
         setSaveStatus('idle');
         setIsAddingTask(false);
       }, 700);
@@ -163,6 +291,89 @@ export default function HomeScreen() {
                   })}
                 </View>
               </View>
+
+              {/* Ubicación Toggle */}
+              <View style={styles.toggleRow}>
+                <Text style={sharedStyles.label}>Agregar ubicación</Text>
+                <Switch
+                  value={locationEnabled}
+                  onValueChange={(val) => {
+                    setLocationEnabled(val);
+                    if (val && locationPermission === null) {
+                      requestLocationPermission();
+                    }
+                  }}
+                  trackColor={{ false: theme.surfaceVariant, true: theme.primaryContainer }}
+                  thumbColor={locationEnabled ? theme.primary : theme.outline}
+                />
+              </View>
+
+              {/* Ubicación Map / Permission message */}
+              {locationEnabled && (
+                <View style={styles.locationContainer}>
+                  {locationPermission === null ? (
+                    <View style={[styles.infoBox, { borderColor: theme.surfaceVariant }]}>
+                      <Text style={[styles.infoText, { color: theme.onSurfaceVariant }]}>Solicitando permisos de ubicación...</Text>
+                    </View>
+                  ) : locationPermission === false ? (
+                    <View style={[styles.errorBox, { backgroundColor: theme.errorContainer, borderColor: theme.error }]}>
+                      <SymbolIcon name="error" color={theme.error} size={20} />
+                      <Text style={[styles.errorText, { color: theme.error }]}>
+                        Permiso de ubicación denegado. Habilita los permisos en la configuración de tu dispositivo para usar el mapa.
+                      </Text>
+                    </View>
+                  ) : !selectedLocation ? (
+                    <View style={[styles.infoBox, { borderColor: theme.surfaceVariant }]}>
+                      <Text style={[styles.infoText, { color: theme.onSurfaceVariant }]}>Obteniendo ubicación del GPS...</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.mapWrapper, { borderColor: theme.surfaceVariant }]}>
+                      {Platform.OS === 'web' ? (
+                        <View style={[styles.webMapPlaceholder, { backgroundColor: theme.surfaceContainerHigh }]}>
+                          <SymbolIcon name="place" color={theme.primary} size={32} />
+                          <Text style={[styles.webMapText, { color: theme.onSurfaceVariant }]}>
+                            Mapa no disponible en Web. Ubicación fijada en:
+                          </Text>
+                          <Text style={[styles.webMapAddress, { color: theme.onSurface }]}>
+                            {selectedLocation.address || 'Obteniendo dirección...'}
+                          </Text>
+                        </View>
+                      ) : (
+                        <>
+                          <MapView
+                            provider={PROVIDER_GOOGLE}
+                            style={styles.map}
+                            initialRegion={{
+                              latitude: selectedLocation.latitude,
+                              longitude: selectedLocation.longitude,
+                              latitudeDelta: 0.00922,
+                              longitudeDelta: 0.00421,
+                            }}
+                            onPress={handleMapPress}
+                          >
+                            <Marker
+                              coordinate={{
+                                latitude: selectedLocation.latitude,
+                                longitude: selectedLocation.longitude,
+                              }}
+                              draggable
+                              onDragEnd={handleMarkerDragEnd}
+                              title="Ubicación de la Tarea"
+                              description={selectedLocation.address}
+                            />
+                          </MapView>
+                          <View style={[styles.addressBar, { backgroundColor: theme.surfaceContainer, borderTopColor: theme.surfaceVariant }]}>
+                            <SymbolIcon name="place" color={theme.primary} size={16} />
+                            <Text style={[styles.addressText, { color: theme.onSurface }]} numberOfLines={1}>
+                              {isGeocoding ? 'Obteniendo dirección...' : selectedLocation?.address || 'Selecciona un punto en el mapa'}
+                            </Text>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Action Buttons */}
               <View style={styles.actions}>
@@ -303,6 +514,14 @@ function TaskRow({ task, theme, onToggle, onDelete, styles }: { task: Task; them
           <Text style={[styles.cardTitle, { color: theme.onSurface }, comp && styles.cardTitleComp]}>{task.getTitle()}</Text>
           {task.getDescription().trim() !== '' && (
             <Text style={[styles.cardDesc, { color: theme.onSurfaceVariant }, comp && styles.cardTitleComp]} numberOfLines={1}>{task.getDescription()}</Text>
+          )}
+          {task.getLocation() && task.getLocation()?.address && (
+            <View style={styles.cardLocationRow}>
+              <SymbolIcon name="place" color={theme.primary} size={12} />
+              <Text style={[styles.cardLocationText, { color: theme.primary }]} numberOfLines={1}>
+                {task.getLocation()?.address}
+              </Text>
+            </View>
           )}
         </View>
       </Pressable>

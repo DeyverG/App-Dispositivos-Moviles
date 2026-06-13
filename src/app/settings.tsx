@@ -6,6 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useTaskManager } from '@/hooks/use-task-manager';
 import { SymbolIcon } from '@/components/symbol-icon';
 import { createAppStyles } from '@/constants/styles';
+import { Spacing } from '@/constants/theme';
 
 /**
  * SettingsScreen allowing users to customize their profile settings.
@@ -15,7 +16,7 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { shared: sharedStyles, settings: styles } = createAppStyles(theme);
-  const { profile, updateUserProfileName, loaded } = useTaskManager();
+  const { profile, updateUserProfileName, loaded, signOut } = useTaskManager();
 
   const [name, setName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'completed'>('idle');
@@ -85,7 +86,7 @@ export default function SettingsScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     sharedStyles.primaryButton,
-                    { backgroundColor: saveStatus === 'completed' ? theme.secondary : theme.primary },
+                    { backgroundColor: saveStatus === 'completed' ? theme.secondary : theme.primary, flex: 1 },
                     pressed && sharedStyles.primaryButtonPressed,
                   ]}
                   onPress={handleSave}
@@ -94,6 +95,23 @@ export default function SettingsScreen() {
                   <SymbolIcon name={saveStatus === 'completed' ? 'task_alt' : 'save'} color={theme.onPrimary} size={18} />
                   <Text style={sharedStyles.primaryButtonText}>
                     {saveStatus === 'saving' ? 'Guardando...' : saveStatus === 'completed' ? '¡Guardado!' : 'Guardar cambios'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Logout Button */}
+              <View style={[styles.btnRow, { marginTop: Spacing.two }]}>
+                <Pressable
+                  style={({ pressed }) => [
+                    sharedStyles.primaryButton,
+                    { backgroundColor: 'transparent', borderColor: theme.error, borderWidth: 2, flex: 1 },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={signOut}
+                >
+                  <SymbolIcon name="logout" color={theme.error} size={18} />
+                  <Text style={[sharedStyles.primaryButtonText, { color: theme.error }]}>
+                    Cerrar sesión
                   </Text>
                 </Pressable>
               </View>

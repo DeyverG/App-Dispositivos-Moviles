@@ -1,6 +1,15 @@
 import { BaseModel } from './BaseModel';
 
 /**
+ * Interface representing the location metadata of a Task.
+ */
+export interface TaskLocation {
+  latitude: number;
+  longitude: number;
+  address?: string;
+}
+
+/**
  * Enumeration representing the valid priority levels of a Task.
  */
 export enum TaskPriority {
@@ -18,6 +27,7 @@ export class Task extends BaseModel {
   private description: string;
   private priority: TaskPriority;
   private completed: boolean;
+  private location?: TaskLocation;
 
   /**
    * Constructs a new Task instance.
@@ -27,6 +37,7 @@ export class Task extends BaseModel {
    * @param completed Completion status. Defaults to false.
    * @param id Optional existing ID for deserialization.
    * @param createdAt Optional existing creation timestamp for deserialization.
+   * @param location Optional location details.
    */
   constructor(
     title: string,
@@ -34,13 +45,15 @@ export class Task extends BaseModel {
     priority: TaskPriority = TaskPriority.MEDIUM,
     completed: boolean = false,
     id?: string,
-    createdAt?: number
+    createdAt?: number,
+    location?: TaskLocation
   ) {
     super(id, createdAt);
     this.title = title;
     this.description = description;
     this.priority = priority;
     this.completed = completed;
+    this.location = location;
   }
 
   /**
@@ -111,6 +124,20 @@ export class Task extends BaseModel {
   }
 
   /**
+   * Gets the location of the task.
+   */
+  public getLocation(): TaskLocation | undefined {
+    return this.location;
+  }
+
+  /**
+   * Sets the location of the task.
+   */
+  public setLocation(location?: TaskLocation): void {
+    this.location = location;
+  }
+
+  /**
    * Serializes the Task instance into a standard JSON object.
    * Overrides BaseModel.toJSON().
    */
@@ -122,6 +149,7 @@ export class Task extends BaseModel {
       description: this.description,
       priority: this.priority,
       completed: this.completed,
+      location: this.location || null,
     };
   }
 
@@ -137,7 +165,8 @@ export class Task extends BaseModel {
       (json.priority as TaskPriority) || TaskPriority.MEDIUM,
       !!json.completed,
       json.id,
-      json.createdAt
+      json.createdAt,
+      json.location || undefined
     );
   }
 }

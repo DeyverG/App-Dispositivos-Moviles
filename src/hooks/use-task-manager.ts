@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { TaskManager } from '../services/TaskManager';
-import { Task, TaskPriority } from '../models/Task';
+import { Task, TaskPriority, TaskLocation } from '../models/Task';
 import { UserProfile } from '../models/UserProfile';
+import { User } from 'firebase/auth';
 
 /**
  * Custom React hook that connects components to the TaskManager OOP singleton.
@@ -14,6 +15,8 @@ export function useTaskManager() {
   const [tasks, setTasks] = useState<Task[]>(manager.getTasks());
   const [profile, setProfile] = useState<UserProfile>(manager.getUserProfile());
   const [loaded, setLoaded] = useState<boolean>(manager.isLoaded());
+  const [user, setUser] = useState<User | null>(manager.getCurrentUser());
+  const [authLoaded, setAuthLoaded] = useState<boolean>(manager.isAuthLoaded());
 
   useEffect(() => {
     // Subscribe to state change notifications from the Singleton manager
@@ -21,12 +24,16 @@ export function useTaskManager() {
       setTasks(manager.getTasks());
       setProfile(manager.getUserProfile());
       setLoaded(manager.isLoaded());
+      setUser(manager.getCurrentUser());
+      setAuthLoaded(manager.isAuthLoaded());
     });
 
     // Sync state in case it loaded/changed before mount
     setTasks(manager.getTasks());
     setProfile(manager.getUserProfile());
     setLoaded(manager.isLoaded());
+    setUser(manager.getCurrentUser());
+    setAuthLoaded(manager.isAuthLoaded());
 
     // Clean up subscription on unmount
     return unsubscribe;
@@ -37,8 +44,16 @@ export function useTaskManager() {
     tasks,
     profile,
     loaded,
-    addTask: (title: string, description: string = '', priority: TaskPriority = TaskPriority.MEDIUM) =>
-      manager.addTask(title, description, priority),
+    user,
+    authLoaded,
+    signIn: (email: string, password: string) =>
+      manager.signIn(email, password),
+    signUp: (name: string, email: string, password: string) =>
+      manager.signUp(name, email, password),
+    signOut: () =>
+      manager.signOut(),
+    addTask: (title: string, description: string = '', priority: TaskPriority = TaskPriority.MEDIUM, location?: TaskLocation) =>
+      manager.addTask(title, description, priority, location),
     deleteTask: (id: string) =>
       manager.deleteTask(id),
     toggleTaskCompleted: (id: string) =>

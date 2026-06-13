@@ -12,7 +12,12 @@ export type IconName =
   | 'schedule'
   | 'delete'
   | 'close'
-  | 'save';
+  | 'save'
+  | 'logout'
+  | 'error'
+  | 'arrow_forward'
+  | 'how_to_reg'
+  | 'place';
 
 interface SymbolIconProps {
   name: IconName;
@@ -72,6 +77,31 @@ export function SymbolIcon({ name, size = 24, color, style }: SymbolIconProps) {
       ios: 'square.and.arrow.down.fill',
       android: 'save',
       web: '💾',
+    },
+    logout: {
+      ios: 'arrow.left.square.fill',
+      android: 'logout',
+      web: '🚪',
+    },
+    error: {
+      ios: 'exclamationmark.triangle.fill',
+      android: 'error',
+      web: '⚠️',
+    },
+    arrow_forward: {
+      ios: 'arrow.right.circle.fill',
+      android: 'arrow_forward',
+      web: '➔',
+    },
+    how_to_reg: {
+      ios: 'person.badge.plus.fill',
+      android: 'how_to_reg',
+      web: '👤+',
+    },
+    place: {
+      ios: 'mappin.and.ellipse',
+      android: 'place',
+      web: '📍',
     },
   };
 

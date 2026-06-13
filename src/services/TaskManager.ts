@@ -1,13 +1,27 @@
-import { Task, TaskPriority } from '../models/Task';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  User
+} from 'firebase/auth';
+import {
+  onValue,
+  ref,
+  remove,
+  set,
+  Unsubscribe
+} from 'firebase/database';
+import { Task, TaskPriority, TaskLocation } from '../models/Task';
 import { UserProfile } from '../models/UserProfile';
-import { StorageService } from './StorageService';
-import { HybridStorageService } from './HybridStorageService';
+import { getFirebaseAuth, getFirebaseDatabase } from './firebase';
 
 type StateChangeListener = () => void;
 
 /**
  * Singleton class that orchestrates the core business logic of the Taskly application.
- * Manages tasks and user profiles, enforces validation rules, and handles persistence.
+ * Manages tasks and user profiles, enforces validation rules, and handles persistence with Firebase.
  * Implements the Observer pattern to keep React components reactive.
  */
 export class TaskManager {
@@ -16,14 +30,32 @@ export class TaskManager {
   // Encapsulated state properties
   private tasks: Task[] = [];
   private profile: UserProfile;
-  private storage: StorageService;
   private listeners: Set<StateChangeListener> = new Set();
   private loaded: boolean = false;
+  
+  // Firebase Auth state
+  private currentUser: User | null = null;
+  private authLoaded: boolean = false;
+
+  // Firebase listener unsubscribes
+  private tasksListenerUnsubscribe: Unsubscribe | null = null;
+  private profileListenerUnsubscribe: Unsubscribe | null = null;
+
+  // Lazy getters for Firebase services
+  private get auth() {
+    return getFirebaseAuth();
+  }
+
+  private get database() {
+    return getFirebaseDatabase();
+  }
 
   private constructor() {
-    this.profile = new UserProfile('Deyver');
-    this.storage = new HybridStorageService();
-    this.loadPersistedData();
+    this.profile = new UserProfile('');
+    // Listen to Firebase Auth state changes
+    onAuthStateChanged(this.auth, (user) => {
+      this.handleAuthStateChange(user);
+    });
   }
 
   public static getInstance(): TaskManager {
@@ -37,46 +69,76 @@ export class TaskManager {
     TaskManager.instance = null;
   }
 
-  public setStorageService(storage: StorageService): void {
-    this.storage = storage;
-    this.loaded = false;
-    this.loadPersistedData();
-  }
-
   /**
-   * Loads saved tasks and profile name. Starts empty if no tasks exist (no defaults).
+   * Responds to Firebase Auth state changes. Sets listeners for the user's tasks
+   * and profile name, or unsubscribes them upon sign out.
    */
-  private async loadPersistedData(): Promise<void> {
-    try {
-      const storedProfile = await this.storage.getItem('taskly_user_profile');
-      if (storedProfile) {
-        this.profile = UserProfile.fromJSON(JSON.parse(storedProfile));
-      }
+  private async handleAuthStateChange(user: User | null): Promise<void> {
+    // Unsubscribe from previous database paths
+    if (this.tasksListenerUnsubscribe) {
+      this.tasksListenerUnsubscribe();
+      this.tasksListenerUnsubscribe = null;
+    }
+    if (this.profileListenerUnsubscribe) {
+      this.profileListenerUnsubscribe();
+      this.profileListenerUnsubscribe = null;
+    }
 
-      const storedTasks = await this.storage.getItem('taskly_user_tasks');
-      if (storedTasks) {
-        const parsed = JSON.parse(storedTasks) as Record<string, any>[];
-        this.tasks = parsed.map(t => Task.fromJSON(t));
-      } else {
-        // No default tasks seeded, start completely empty as requested
-        this.tasks = [];
-        await this.persistData();
-      }
-    } catch (e) {
-      console.error('Error loading persisted data inside TaskManager:', e);
-    } finally {
+    this.currentUser = user;
+
+    if (user) {
+      // 1. Subscribe to profile name changes in Realtime Database
+      const profileRef = ref(this.database, `users/${user.uid}/profile`);
+      this.profileListenerUnsubscribe = onValue(profileRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val && val.name) {
+          this.profile = new UserProfile(val.name);
+        } else {
+          // Fallback to displayName or prefix of email
+          const defaultName = user.displayName || user.email?.split('@')[0] || 'Usuario';
+          this.profile = new UserProfile(defaultName);
+          // Set in database as initialization
+          set(profileRef, { name: defaultName });
+        }
+        this.notifyListeners();
+      });
+
+      // 2. Subscribe to tasks in Realtime Database
+      const tasksRef = ref(this.database, `users/${user.uid}/tasks`);
+      this.loaded = false;
+      this.notifyListeners();
+
+      this.tasksListenerUnsubscribe = onValue(tasksRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+          const tasksList: Task[] = [];
+          Object.keys(val).forEach(key => {
+            tasksList.push(this.deserializeTask(val[key]));
+          });
+          // Sort tasks by creation date (newest first)
+          tasksList.sort((a, b) => b.getCreatedAt() - a.getCreatedAt());
+          this.tasks = tasksList;
+        } else {
+          this.tasks = [];
+        }
+        this.loaded = true;
+        this.notifyListeners();
+      }, (error) => {
+        console.error('Error listening to tasks in Realtime Database:', error);
+        this.loaded = true;
+        this.notifyListeners();
+      });
+
+    } else {
+      // Clear data if logged out
+      this.tasks = [];
+      this.profile = new UserProfile('');
       this.loaded = true;
       this.notifyListeners();
     }
-  }
 
-  private async persistData(): Promise<void> {
-    try {
-      await this.storage.setItem('taskly_user_profile', JSON.stringify(this.profile.toJSON()));
-      await this.storage.setItem('taskly_user_tasks', JSON.stringify(this.tasks.map(t => t.toJSON())));
-    } catch (e) {
-      console.error('Error persisting data inside TaskManager:', e);
-    }
+    this.authLoaded = true;
+    this.notifyListeners();
   }
 
   public subscribe(listener: StateChangeListener): () => void {
@@ -112,59 +174,132 @@ export class TaskManager {
     return this.profile;
   }
 
-  /**
-   * Optimistic UI update: notify listeners first, then persist in background
-   */
-  public async addTask(title: string, description: string = '', priority: TaskPriority = TaskPriority.MEDIUM): Promise<Task> {
-    const task = new Task(title, description, priority);
-    this.tasks.push(task);
-    this.notifyListeners();
-    await this.persistData();
+  public getCurrentUser(): User | null {
+    return this.currentUser;
+  }
+
+  public isAuthLoaded(): boolean {
+    return this.authLoaded;
+  }
+
+  /* ==========================================================
+     AUTHENTICATION METHODS
+     ========================================================== */
+  
+  public async signIn(email: string, password: string): Promise<User> {
+    const userCredential = await signInWithEmailAndPassword(this.auth, email, password);
+    return userCredential.user;
+  }
+
+  public async signUp(name: string, email: string, password: string): Promise<User> {
+    const userCredential = await createUserWithEmailAndPassword(this.auth, email, password);
+    const user = userCredential.user;
+    
+    // Update profile display name in Firebase Auth
+    await updateProfile(user, { displayName: name });
+    
+    // Set profile in Realtime Database
+    const profileRef = ref(this.database, `users/${user.uid}/profile`);
+    await set(profileRef, { name });
+    
+    return user;
+  }
+
+  public async signOut(): Promise<void> {
+    await signOut(this.auth);
+  }
+
+  /* ==========================================================
+     TASK DATABASE OPERATIONS
+     ========================================================== */
+
+  public async addTask(
+    title: string,
+    description: string = '',
+    priority: TaskPriority = TaskPriority.MEDIUM,
+    location?: TaskLocation
+  ): Promise<Task> {
+    if (!this.currentUser) {
+      throw new Error('No hay un usuario autenticado para realizar esta acción.');
+    }
+    const task = new Task(title, description, priority, false, undefined, undefined, location);
+    const taskRef = ref(this.database, `users/${this.currentUser.uid}/tasks/${task.getId()}`);
+    await set(taskRef, this.serializeTask(task));
     return task;
   }
 
-  /**
-   * Optimistic UI update: notify listeners first, then persist in background
-   */
   public async deleteTask(id: string): Promise<boolean> {
-    const originalLength = this.tasks.length;
-    this.tasks = this.tasks.filter(t => t.getId() !== id);
-    const deleted = this.tasks.length < originalLength;
-    if (deleted) {
-      this.notifyListeners();
-      await this.persistData();
+    if (!this.currentUser) {
+      return false;
     }
-    return deleted;
+    const taskRef = ref(this.database, `users/${this.currentUser.uid}/tasks/${id}`);
+    await remove(taskRef);
+    return true;
   }
 
-  /**
-   * Instantly toggles the task completion using immutability, notifying listeners first.
-   */
   public async toggleTaskCompleted(id: string): Promise<void> {
-    this.tasks = this.tasks.map(t => {
-      if (t.getId() === id) {
-        // Immutable update: create a new Task object reference to trigger React state updates
-        return new Task(
-          t.getTitle(),
-          t.getDescription(),
-          t.getPriority(),
-          !t.isCompleted(),
-          t.getId(),
-          t.getCreatedAt()
-        );
-      }
-      return t;
-    });
-    this.notifyListeners();
-    await this.persistData();
+    if (!this.currentUser) {
+      return;
+    }
+    const task = this.tasks.find(t => t.getId() === id);
+    if (task) {
+      const taskRef = ref(this.database, `users/${this.currentUser.uid}/tasks/${id}`);
+      await set(taskRef, {
+        ...this.serializeTask(task),
+        completed: !task.isCompleted(),
+      });
+    }
   }
 
-  /**
-   * Optimistic UI update: notify listeners first, then persist in background
-   */
   public async updateUserProfileName(name: string): Promise<void> {
-    this.profile.setName(name);
-    this.notifyListeners();
-    await this.persistData();
+    if (!this.currentUser) {
+      return;
+    }
+    // Update display name in Firebase Auth
+    await updateProfile(this.currentUser, { displayName: name });
+    // Update profile in database
+    const profileRef = ref(this.database, `users/${this.currentUser.uid}/profile`);
+    await set(profileRef, { name });
+  }
+
+  /* ==========================================================
+     SERIALIZATION HELPERS (Maps Low/Medium/High to bajo/media/alta)
+     ========================================================== */
+
+  private serializeTask(task: Task): Record<string, any> {
+    let priorityStr = 'media';
+    if (task.getPriority() === TaskPriority.HIGH) priorityStr = 'alta';
+    else if (task.getPriority() === TaskPriority.LOW) priorityStr = 'bajo';
+
+    const serialized: Record<string, any> = {
+      id: task.getId(),
+      createdAt: task.getCreatedAt(),
+      title: task.getTitle(),
+      description: task.getDescription(),
+      priority: priorityStr,
+      completed: task.isCompleted(),
+    };
+
+    if (task.getLocation()) {
+      serialized.location = task.getLocation();
+    }
+
+    return serialized;
+  }
+
+  private deserializeTask(json: Record<string, any>): Task {
+    let priorityVal = TaskPriority.MEDIUM;
+    if (json.priority === 'alta') priorityVal = TaskPriority.HIGH;
+    else if (json.priority === 'bajo') priorityVal = TaskPriority.LOW;
+
+    return new Task(
+      json.title,
+      json.description || '',
+      priorityVal,
+      !!json.completed,
+      json.id,
+      json.createdAt,
+      json.location || undefined
+    );
   }
 }
