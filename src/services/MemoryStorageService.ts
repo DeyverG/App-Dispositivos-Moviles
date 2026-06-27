@@ -5,7 +5,7 @@ import { StorageService } from './StorageService';
  * Primarily used as a fallback, during testing, or when running in restricted environments.
  */
 export class MemoryStorageService extends StorageService {
-  private storage: Map<string, string> = new Map();
+  private readonly storage: Map<string, string> = new Map();
 
   /**
    * Retrieves an item from the in-memory map.

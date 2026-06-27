@@ -26,86 +26,27 @@ interface SymbolIconProps {
   style?: any;
 }
 
-/**
- * Reusable icon component that resolves icon designs across iOS, Android, and Web.
- * Encapsulates platform-specific mappings to provide a consistent appearance.
- */
-export function SymbolIcon({ name, size = 24, color, style }: SymbolIconProps) {
-  // Map our abstract icon names to iOS SF Symbols, Android Material icons, and Web text characters
-  const mapping = {
-    smart_toy: {
-      ios: 'sparkles',
-      android: 'smart_toy',
-      web: '🤖',
-    },
-    add: {
-      ios: 'plus',
-      android: 'add',
-      web: '+',
-    },
-    task_alt: {
-      ios: 'checkmark.circle.fill',
-      android: 'task_alt',
-      web: '✓',
-    },
-    settings: {
-      ios: 'gearshape.fill',
-      android: 'settings',
-      web: '⚙',
-    },
-    flag: {
-      ios: 'flag.fill',
-      android: 'flag',
-      web: '🚩',
-    },
-    schedule: {
-      ios: 'clock.fill',
-      android: 'schedule',
-      web: '🕒',
-    },
-    delete: {
-      ios: 'trash.fill',
-      android: 'delete',
-      web: '🗑',
-    },
-    close: {
-      ios: 'xmark',
-      android: 'close',
-      web: '✕',
-    },
-    save: {
-      ios: 'square.and.arrow.down.fill',
-      android: 'save',
-      web: '💾',
-    },
-    logout: {
-      ios: 'arrow.left.square.fill',
-      android: 'logout',
-      web: '🚪',
-    },
-    error: {
-      ios: 'exclamationmark.triangle.fill',
-      android: 'error',
-      web: '⚠️',
-    },
-    arrow_forward: {
-      ios: 'arrow.right.circle.fill',
-      android: 'arrow_forward',
-      web: '➔',
-    },
-    how_to_reg: {
-      ios: 'person.badge.plus.fill',
-      android: 'how_to_reg',
-      web: '👤+',
-    },
-    place: {
-      ios: 'mappin.and.ellipse',
-      android: 'place',
-      web: '📍',
-    },
-  };
+// Map our abstract icon names to iOS SF Symbols, Android Material icons, and Web text characters
+const mapping = new Map<IconName, { ios: string; android: string; web: string }>([
+  ['smart_toy', { ios: 'sparkles', android: 'smart_toy', web: '🤖' }],
+  ['add', { ios: 'plus', android: 'add', web: '+' }],
+  ['task_alt', { ios: 'checkmark.circle.fill', android: 'task_alt', web: '✓' }],
+  ['settings', { ios: 'gearshape.fill', android: 'settings', web: '⚙' }],
+  ['flag', { ios: 'flag.fill', android: 'flag', web: '🚩' }],
+  ['schedule', { ios: 'clock.fill', android: 'schedule', web: '🕒' }],
+  ['delete', { ios: 'trash.fill', android: 'delete', web: '🗑' }],
+  ['close', { ios: 'xmark', android: 'close', web: '✕' }],
+  ['save', { ios: 'square.and.arrow.down.fill', android: 'save', web: '💾' }],
+  ['logout', { ios: 'arrow.left.square.fill', android: 'logout', web: '🚪' }],
+  ['error', { ios: 'exclamationmark.triangle.fill', android: 'error', web: '⚠️' }],
+  ['arrow_forward', { ios: 'arrow.right.circle.fill', android: 'arrow_forward', web: '➔' }],
+  ['how_to_reg', { ios: 'person.badge.plus.fill', android: 'how_to_reg', web: '👤+' }],
+  ['place', { ios: 'mappin.and.ellipse', android: 'place', web: '📍' }],
+]);
 
-  const currentMap = mapping[name];
+export function SymbolIcon({ name, size = 24, color, style }: SymbolIconProps) {
+  const currentMap = mapping.get(name);
+  if (!currentMap) return null;
 
   if (Platform.OS === 'web') {
     // Render text fallback on Web

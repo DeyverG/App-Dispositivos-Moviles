@@ -18,6 +18,18 @@ import { useTaskManager } from '@/hooks/use-task-manager';
 import { SymbolIcon } from '@/components/symbol-icon';
 import { Spacing } from '@/constants/theme';
 
+const validateEmail = (email: string): boolean => {
+  if (email.length > 254) return false;
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  const [local, domain] = parts;
+  if (!local || !domain) return false;
+  if (local.includes(' ') || domain.includes(' ')) return false;
+  const dotIdx = domain.lastIndexOf('.');
+  if (dotIdx <= 0 || dotIdx === domain.length - 1) return false;
+  return true;
+};
+
 export default function AuthScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -96,8 +108,7 @@ export default function AuthScreen() {
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
+    if (!validateEmail(trimmedEmail)) {
       setError('El formato del correo electrónico es inválido.');
       return;
     }
@@ -144,14 +155,13 @@ export default function AuthScreen() {
     }
 
     // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
+    if (!validateEmail(trimmedEmail)) {
       setError('El formato del correo electrónico es inválido.');
       return;
     }
 
     // Password validation (8+ chars, at least 1 uppercase, 1 lowercase, 1 number, 1 special char)
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.#\-_/\\:;=()[\]{}~+,^$|])[A-Za-z\d@$!%*?&.#\-_/\\:;=()[\]{}~+,^$|]{8,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.#\-_/\\:;=()[\]{}~+,^|])[A-Za-z\d@$!%*?&.#\-_/\\:;=()[\]{}~+,^|]{8,}$/;
     if (!passwordRegex.test(password)) {
       setError('La contraseña debe tener al menos 8 caracteres y contener una mayúscula, una minúscula, un número y un carácter especial.');
       return;

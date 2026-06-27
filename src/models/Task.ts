@@ -68,7 +68,7 @@ export class Task extends BaseModel {
    * @param title New title (cannot be empty or whitespace only).
    */
   public setTitle(title: string): void {
-    if (!title || !title.trim()) {
+    if (!title?.trim()) {
       throw new Error('Task title cannot be empty.');
     }
     this.title = title;

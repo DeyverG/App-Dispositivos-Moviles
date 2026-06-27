@@ -6,7 +6,7 @@ import { StorageService } from './StorageService';
  * and encrypted SecureStore on native environments (iOS/Android) for secure session data.
  */
 export class HybridStorageService extends StorageService {
-  private delegate: StorageService;
+  private readonly delegate: StorageService;
 
   constructor() {
     super();

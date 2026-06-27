@@ -10,18 +10,23 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { user, authLoaded } = useTaskManager();
 
+  let content;
+  if (!authLoaded) {
+    content = (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#191c1c' : '#f8faf9' }}>
+        <ActivityIndicator size="large" color="#006a60" />
+      </View>
+    );
+  } else if (user) {
+    content = <AppTabs />;
+  } else {
+    content = <AuthScreen />;
+  }
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      {!authLoaded ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#191c1c' : '#f8faf9' }}>
-          <ActivityIndicator size="large" color="#006a60" />
-        </View>
-      ) : user ? (
-        <AppTabs />
-      ) : (
-        <AuthScreen /> 
-      )}
+      {content}
     </ThemeProvider>
   );
 }

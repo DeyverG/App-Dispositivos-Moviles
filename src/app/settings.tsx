@@ -39,6 +39,13 @@ export default function SettingsScreen() {
     }, 600);
   };
 
+  let saveButtonText = 'Guardar cambios';
+  if (saveStatus === 'saving') {
+    saveButtonText = 'Guardando...';
+  } else if (saveStatus === 'completed') {
+    saveButtonText = '¡Guardado!';
+  }
+
   return (
     <View style={sharedStyles.container}>
       <View style={[sharedStyles.header, { paddingTop: insets.top, height: 64 + insets.top }]}>
@@ -95,7 +102,7 @@ export default function SettingsScreen() {
                 >
                   <SymbolIcon name={saveStatus === 'completed' ? 'task_alt' : 'save'} color={theme.onPrimary} size={18} />
                   <Text style={sharedStyles.primaryButtonText}>
-                    {saveStatus === 'saving' ? 'Guardando...' : saveStatus === 'completed' ? '¡Guardado!' : 'Guardar cambios'}
+                    {saveButtonText}
                   </Text>
                 </Pressable>
               </View>

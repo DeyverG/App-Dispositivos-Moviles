@@ -30,7 +30,7 @@ export class UserProfile extends BaseModel {
    * @param name New display name (cannot be empty or whitespace only).
    */
   public setName(name: string): void {
-    if (!name || !name.trim()) {
+    if (!name?.trim()) {
       throw new Error('User name cannot be empty.');
     }
     this.name = name;

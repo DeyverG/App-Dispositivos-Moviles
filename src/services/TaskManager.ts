@@ -30,7 +30,7 @@ export class TaskManager {
   // Encapsulated state properties
   private tasks: Task[] = [];
   private profile: UserProfile;
-  private listeners: Set<StateChangeListener> = new Set();
+  private readonly listeners: Set<StateChangeListener> = new Set();
   private loaded: boolean = false;
   
   // Firebase Auth state
@@ -91,7 +91,7 @@ export class TaskManager {
       const profileRef = ref(this.database, `users/${user.uid}/profile`);
       this.profileListenerUnsubscribe = onValue(profileRef, (snapshot) => {
         const val = snapshot.val();
-        if (val && val.name) {
+        if (val?.name) {
           this.profile = new UserProfile(val.name);
         } else {
           // Fallback to displayName or prefix of email
@@ -112,8 +112,8 @@ export class TaskManager {
         const val = snapshot.val();
         if (val) {
           const tasksList: Task[] = [];
-          Object.keys(val).forEach(key => {
-            tasksList.push(this.deserializeTask(val[key]));
+          Object.values(val).forEach(taskJson => {
+            tasksList.push(this.deserializeTask(taskJson as Record<string, any>));
           });
           // Sort tasks by creation date (newest first)
           tasksList.sort((a, b) => b.getCreatedAt() - a.getCreatedAt());
