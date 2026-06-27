@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ export default function AuthScreen() {
   const { signIn, signUp } = useTaskManager();
 
   // Animation values
-  const flipAnim = useRef(new Animated.Value(0)).current;
+  const [flipAnim] = useState(() => new Animated.Value(0));
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -88,14 +88,24 @@ export default function AuthScreen() {
 
   // Form handlers
   const handleLogin = async () => {
-    if (!loginEmail.trim() || !loginPassword.trim()) {
+    const trimmedEmail = loginEmail.trim();
+    const trimmedPassword = loginPassword.trim();
+
+    if (!trimmedEmail || !trimmedPassword) {
       setError('Por favor, rellena todos los campos.');
       return;
     }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError('El formato del correo electrónico es inválido.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      await signIn(loginEmail.trim(), loginPassword.trim());
+      await signIn(trimmedEmail, trimmedPassword);
     } catch (e: any) {
       let errorMsg = 'Error al iniciar sesión. Por favor, inténtalo de nuevo.';
       if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {
@@ -112,18 +122,45 @@ export default function AuthScreen() {
   };
 
   const handleRegister = async () => {
-    if (!registerName.trim() || !registerEmail.trim() || !registerPassword.trim()) {
+    const trimmedName = registerName.trim();
+    const trimmedEmail = registerEmail.trim();
+    const password = registerPassword;
+
+    if (!trimmedName || !trimmedEmail || !password) {
       setError('Por favor, rellena todos los campos.');
       return;
     }
-    if (registerPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+
+    // Name validation: letters, spaces, hyphens, accents (prevents script/HTML injection)
+    const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-]+$/;
+    if (!nameRegex.test(trimmedName)) {
+      setError('El nombre solo puede contener letras, espacios y guiones.');
       return;
     }
+
+    if (trimmedName.length > 50) {
+      setError('El nombre no puede superar los 50 caracteres.');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError('El formato del correo electrónico es inválido.');
+      return;
+    }
+
+    // Password validation (8+ chars, at least 1 uppercase, 1 lowercase, 1 number, 1 special char)
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.#\-_/\\:;=()[\]{}~+,^$|])[A-Za-z\d@$!%*?&.#\-_/\\:;=()[\]{}~+,^$|]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setError('La contraseña debe tener al menos 8 caracteres y contener una mayúscula, una minúscula, un número y un carácter especial.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      await signUp(registerName.trim(), registerEmail.trim(), registerPassword.trim());
+      await signUp(trimmedName, trimmedEmail, password);
     } catch (e: any) {
       let errorMsg = 'Error al registrar usuario. Por favor, inténtalo de nuevo.';
       if (e.code === 'auth/email-already-in-use') {

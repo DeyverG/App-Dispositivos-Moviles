@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+
 /**
  * Abstract base class that provides common properties and methods for all application models.
  * It enforces encapsulation for the unique identifier and creation timestamp, and defines
@@ -11,18 +13,17 @@ export abstract class BaseModel {
   protected id: string;
 
   /**
-   * Timestamp (in milliseconds) representing when the instance was created.
-   * Encapsulated as protected to ensure immutability of creation records.
+   * Outer creation timestamp.
    */
   protected createdAt: number;
 
   /**
    * Initializes a new instance of BaseModel.
-   * @param id Optional existing unique identifier. If omitted, a random 7-character ID will be generated.
+   * @param id Optional existing unique identifier. If omitted, a cryptographically secure random UUID will be generated.
    * @param createdAt Optional existing creation timestamp. If omitted, the current timestamp is used.
    */
   constructor(id?: string, createdAt?: number) {
-    this.id = id || Math.random().toString(36).substring(2, 9);
+    this.id = id || Crypto.randomUUID();
     this.createdAt = createdAt || Date.now();
   }
 

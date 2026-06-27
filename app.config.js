@@ -46,6 +46,7 @@ export default ({ config }) => ({
         androidGoogleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       },
     ],
+    'expo-secure-store',
   ],
   experiments: {
     typedRoutes: true,

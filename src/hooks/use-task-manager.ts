@@ -11,12 +11,12 @@ import { User } from 'firebase/auth';
 export function useTaskManager() {
   const manager = TaskManager.getInstance();
 
-  // Local state mirrored from the singleton
-  const [tasks, setTasks] = useState<Task[]>(manager.getTasks());
-  const [profile, setProfile] = useState<UserProfile>(manager.getUserProfile());
-  const [loaded, setLoaded] = useState<boolean>(manager.isLoaded());
-  const [user, setUser] = useState<User | null>(manager.getCurrentUser());
-  const [authLoaded, setAuthLoaded] = useState<boolean>(manager.isAuthLoaded());
+  // Local state mirrored from the singleton using lazy initializers
+  const [tasks, setTasks] = useState<Task[]>(() => manager.getTasks());
+  const [profile, setProfile] = useState<UserProfile>(() => manager.getUserProfile());
+  const [loaded, setLoaded] = useState<boolean>(() => manager.isLoaded());
+  const [user, setUser] = useState<User | null>(() => manager.getCurrentUser());
+  const [authLoaded, setAuthLoaded] = useState<boolean>(() => manager.isAuthLoaded());
 
   useEffect(() => {
     // Subscribe to state change notifications from the Singleton manager
@@ -28,16 +28,9 @@ export function useTaskManager() {
       setAuthLoaded(manager.isAuthLoaded());
     });
 
-    // Sync state in case it loaded/changed before mount
-    setTasks(manager.getTasks());
-    setProfile(manager.getUserProfile());
-    setLoaded(manager.isLoaded());
-    setUser(manager.getCurrentUser());
-    setAuthLoaded(manager.isAuthLoaded());
-
     // Clean up subscription on unmount
     return unsubscribe;
-  }, []);
+  }, [manager]);
 
   // Expose the reactive state and business logic methods
   return {

@@ -23,6 +23,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (loaded && profile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(profile.getName());
     }
   }, [loaded, profile]);

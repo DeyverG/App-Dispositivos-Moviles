@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Platform, Alert, Switch } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import MapView, { Marker, UrlTile, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useEffect, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '@/hooks/use-theme';
-import { useTaskManager } from '@/hooks/use-task-manager';
-import { TaskPriority, Task } from '@/models/Task';
 import { SymbolIcon } from '@/components/symbol-icon';
 import { createAppStyles } from '@/constants/styles';
+import { useTaskManager } from '@/hooks/use-task-manager';
+import { useTheme } from '@/hooks/use-theme';
+import { Task, TaskPriority } from '@/models/Task';
 
 /**
  * HomeScreen of Taskly. Handles tasks display, empty state, and task creation
@@ -128,11 +128,13 @@ export default function HomeScreen() {
   useEffect(() => {
     if (isAddingTask && locationEnabled) {
       if (locationPermission === null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         requestLocationPermission();
       } else if (locationPermission === true && !selectedLocation) {
         fetchCurrentLocation();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAddingTask, locationEnabled, locationPermission]);
 
   const handleMapPress = (e: any) => {
@@ -162,17 +164,35 @@ export default function HomeScreen() {
 
   // Handles adding task with micro-interaction animation
   const handleSaveTask = () => {
-    if (!title.trim()) {
-      if (Platform.OS === 'web') alert('Por favor, ingresa un título.');
-      else Alert.alert('Campo Requerido', 'Por favor, ingresa un título.');
+    // Strip HTML/Script tags to prevent XSS
+    const sanitizedTitle = title.replace(/<[^>]*>/g, '').trim();
+    const sanitizedDescription = description.replace(/<[^>]*>/g, '').trim();
+
+    if (!sanitizedTitle) {
+      if (Platform.OS === 'web') alert('Por favor, ingresa un título válido.');
+      else Alert.alert('Campo Requerido', 'Por favor, ingresa un título válido.');
+      return;
+    }
+
+    if (sanitizedTitle.length > 100) {
+      const errorMsg = 'El título no puede superar los 100 caracteres.';
+      if (Platform.OS === 'web') alert(errorMsg);
+      else Alert.alert('Límite de caracteres', errorMsg);
+      return;
+    }
+
+    if (sanitizedDescription.length > 1000) {
+      const errorMsg = 'La descripción no puede superar los 1000 caracteres.';
+      if (Platform.OS === 'web') alert(errorMsg);
+      else Alert.alert('Límite de caracteres', errorMsg);
       return;
     }
 
     setSaveStatus('saving');
     setTimeout(async () => {
       await addTask(
-        title,
-        description,
+        sanitizedTitle,
+        sanitizedDescription,
         priority,
         locationEnabled && selectedLocation ? selectedLocation : undefined
       );

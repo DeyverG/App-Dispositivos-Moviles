@@ -3,7 +3,7 @@ import { StorageService } from './StorageService';
 
 /**
  * Polymorphic storage service that delegates to browser localStorage on the web,
- * and standard AsyncStorage on native environments (iOS/Android).
+ * and encrypted SecureStore on native environments (iOS/Android) for secure session data.
  */
 export class HybridStorageService extends StorageService {
   private delegate: StorageService;
@@ -14,7 +14,7 @@ export class HybridStorageService extends StorageService {
     if (Platform.OS === 'web') {
       this.delegate = new WebLocalStorageService();
     } else {
-      this.delegate = new NativeAsyncStorageService();
+      this.delegate = new NativeSecureStorageService();
     }
   }
 
@@ -74,15 +74,16 @@ class WebLocalStorageService extends StorageService {
 }
 
 /**
- * Internal concrete class that interacts with native AsyncStorage.
+ * Internal concrete class that interacts with native expo-secure-store.
  * Uses dynamic require to prevent loading the module on the web, which avoids native warning logs.
  */
-class NativeAsyncStorageService extends StorageService {
+class NativeSecureStorageService extends StorageService {
   private getStorage() {
     try {
-      return require('@react-native-async-storage/async-storage').default;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('expo-secure-store');
     } catch (e) {
-      console.warn('Failed to require AsyncStorage:', e);
+      console.warn('Failed to require expo-secure-store:', e);
       return null;
     }
   }
@@ -91,7 +92,7 @@ class NativeAsyncStorageService extends StorageService {
     try {
       const storage = this.getStorage();
       if (!storage) return null;
-      return await storage.getItem(key);
+      return await storage.getItemAsync(key);
     } catch {
       return null;
     }
@@ -101,9 +102,9 @@ class NativeAsyncStorageService extends StorageService {
     try {
       const storage = this.getStorage();
       if (!storage) return;
-      await storage.setItem(key, value);
+      await storage.setItemAsync(key, value);
     } catch (e) {
-      console.warn('AsyncStorage write failed:', e);
+      console.warn('SecureStore write failed:', e);
     }
   }
 
@@ -111,9 +112,9 @@ class NativeAsyncStorageService extends StorageService {
     try {
       const storage = this.getStorage();
       if (!storage) return;
-      await storage.removeItem(key);
+      await storage.deleteItemAsync(key);
     } catch (e) {
-      console.warn('AsyncStorage remove failed:', e);
+      console.warn('SecureStore remove failed:', e);
     }
   }
 }
